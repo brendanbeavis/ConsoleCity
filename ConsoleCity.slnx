@@ -1,0 +1,57 @@
+<Solution>
+  <Folder Name="/docs/">
+    <File Path="docs/01-vision-and-design-principles.md" />
+    <File Path="docs/02-world-model.md" />
+    <File Path="docs/03-simulation-cycle.md" />
+    <File Path="docs/04-people-agents.md" />
+    <File Path="docs/05-rico-land-use.md" />
+    <File Path="docs/06-buildings-and-organisations.md" />
+    <File Path="docs/07-transport.md" />
+    <File Path="docs/08-services.md" />
+    <File Path="docs/09-infrastructure.md" />
+    <File Path="docs/10-parks-and-recreation.md" />
+    <File Path="docs/11-farms-and-food.md" />
+    <File Path="docs/12-terrain-and-resources.md" />
+    <File Path="docs/13-economy.md" />
+    <File Path="docs/14-government-and-civic-systems.md" />
+    <File Path="docs/15-technology-and-research.md" />
+    <File Path="docs/16-events-and-emergent-stories.md" />
+    <File Path="docs/17-core-game-loop.md" />
+    <File Path="docs/18-ui-and-menus.md" />
+    <File Path="docs/19-world-creation-and-editing.md" />
+    <File Path="docs/20-credits-and-roguelike-progression.md" />
+    <File Path="docs/21-roguelike-upgrades.md" />
+    <File Path="docs/22-additional-gamification.md" />
+    <File Path="docs/23-save-load-and-replay.md" />
+    <File Path="docs/24-technical-architecture.md" />
+    <File Path="docs/25-code-structure-and-standards.md" />
+    <File Path="docs/26-testing-and-automation.md" />
+    <File Path="docs/27-data-driven-content.md" />
+    <File Path="docs/28-mvp-and-implementation-roadmap.md" />
+    <File Path="docs/INDEX.md" />
+    <File Path="docs/README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/ConsoleCity.Agents/ConsoleCity.Agents.csproj" />
+    <Project Path="src/ConsoleCity.Console/ConsoleCity.Console.csproj" />
+    <Project Path="src/ConsoleCity.Core/ConsoleCity.Core.csproj" />
+    <Project Path="src/ConsoleCity.Economy/ConsoleCity.Economy.csproj" />
+    <Project Path="src/ConsoleCity.Game/ConsoleCity.Game.csproj" />
+    <Project Path="src/ConsoleCity.Infrastructure/ConsoleCity.Infrastructure.csproj" />
+    <Project Path="src/ConsoleCity.Services/ConsoleCity.Services.csproj" />
+    <Project Path="src/ConsoleCity.Simulation/ConsoleCity.Simulation.csproj" />
+    <Project Path="src/ConsoleCity.Transport/ConsoleCity.Transport.csproj" />
+    <Project Path="src/ConsoleCity.World/ConsoleCity.World.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ConsoleCity.Agents.Tests/ConsoleCity.Agents.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Console.Tests/ConsoleCity.Console.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Core.Tests/ConsoleCity.Core.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Economy.Tests/ConsoleCity.Economy.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Infrastructure.Tests/ConsoleCity.Infrastructure.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Services.Tests/ConsoleCity.Services.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Simulation.Tests/ConsoleCity.Simulation.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Transport.Tests/ConsoleCity.Transport.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.World.Tests/ConsoleCity.World.Tests.csproj" />
+  </Folder>
+</Solution>
