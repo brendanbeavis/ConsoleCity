@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ConsoleCity.Core\ConsoleCity.Core.csproj" />
     <ProjectReference Include="..\ConsoleCity.World\ConsoleCity.World.csproj" />
+    <ProjectReference Include="..\ConsoleCity.Economy\ConsoleCity.Economy.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

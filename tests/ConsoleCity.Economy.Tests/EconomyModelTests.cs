@@ -199,4 +199,27 @@ public class EconomyModelTests
             [new AgentGoal(GoalType.Shelter, "Keep a stable home", 0.8d)],
             new RoutinePlan([new RoutineBlock(8, 17, AgentActionType.GoToWork)]));
     }
+
+    [Fact]
+    public void Advance_RequestsTransport_WhenShortageOccurs()
+    {
+        var personId = PersonId.New();
+        var householdId = HouseholdId.New();
+
+        var household = CreateHousehold(householdId, personId, savings: new Money(10m), foodDemand: new Quantity(3m));
+        var business = CreateBusiness(OrganizationId.New(), [], [], [], new Money(0m), new Money(0m));
+
+        var model = new SimpleEconomyModel(new EconomySnapshot(
+            new SimulationTime(0),
+            [new PriceQuote("packaged-food", 5m, 5m)],
+            [],
+            new EconomicIndicators(0m, Money.Zero, Money.Zero, Money.Zero, Money.Zero, 0),
+            [business],
+            GovernmentFinance.Zero));
+
+        var result = model.Advance(new SimulationTime(1), [], [household]);
+
+        Assert.NotEmpty(result.TransportRequests);
+        Assert.Contains(result.TransportRequests, r => r.ResourceId.Value == "packaged-food");
+    }
 }

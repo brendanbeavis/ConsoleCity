@@ -1,11 +1,12 @@
 using ConsoleCity.Core;
 using ConsoleCity.Game;
+using ConsoleCity.Game.Construction;
 using ConsoleCity.World;
 using ConsoleCity.Agents;
 
 namespace ConsoleCity.Console;
 
-internal static class Program
+public static class Program
 {
     private static async Task Main()
     {
@@ -102,6 +103,20 @@ internal static class Program
                 "  inspect person <query>    Inspect a person by name or id",
                 "  inspect household <query> Inspect a household by id or member name",
                 "  inspect building <query>  Inspect a building by name or id",
+                "  build <type> <x> <y>     Construct a building at location (x, y)",
+                "  demolish <building_id>   Demolish an existing building",
+                "  constructions             List active construction projects",
+                "  cancel <construction_id> Cancel an active construction",
+                "  map                       Display ASCII map of world",
+                "  map region <x1> <y1> <x2> <y2>  Display specific region",
+                "  map coords                Display map with coordinates",
+                "  map legend                Display map with legend",
+                "  map buildings             List all buildings on map",
+                "  map plots                 List all plots on map",
+                "  map cell <x> <y>         Show details for specific cell",
+                "  save <name>               Save the current simulation",
+                "  load <name>               Load a saved simulation",
+                "  saves                     List available saves",
                 "  time                      Show simulation time",
                 "  help                      Show commands",
                 "  exit                      Quit"
@@ -133,6 +148,29 @@ internal static class Program
             var ticks = TryParseTrailingInt(command) ?? 1;
             session.Advance(Math.Max(1, ticks));
             return $"Advanced {ticks} hour(s). Current time: {FormatTime(session.Time)}.";
+        }
+
+        if (command.StartsWith("save ", StringComparison.OrdinalIgnoreCase))
+        {
+            var name = command[5..].Trim();
+            if (string.IsNullOrEmpty(name)) return "Specify a save name.";
+            session.Save(name);
+            return $"Saved '{name}'.";
+        }
+
+        if (command.StartsWith("load ", StringComparison.OrdinalIgnoreCase))
+        {
+            var name = command[5..].Trim();
+            if (string.IsNullOrEmpty(name)) return "Specify a save name.";
+            session.Load(name);
+            return $"Loaded '{name}'.";
+        }
+
+        if (command.Equals("saves", StringComparison.OrdinalIgnoreCase))
+        {
+            var saves = session.ListSaves();
+            if (saves == null || saves.Count == 0) return "No saves found.";
+            return string.Join(Environment.NewLine, new[] { "Saves:" }.Concat(saves));
         }
 
         if (command.Equals("time", StringComparison.OrdinalIgnoreCase))
@@ -241,7 +279,210 @@ internal static class Program
             return string.Join(Environment.NewLine, lines);
         }
 
+        if (command.StartsWith("build ", StringComparison.OrdinalIgnoreCase))
+        {
+            return HandleBuildCommand(session, command[6..].Trim());
+        }
+
+        if (command.StartsWith("demolish ", StringComparison.OrdinalIgnoreCase))
+        {
+            return HandleDemolishCommand(session, command[9..].Trim());
+        }
+
+        if (command.Equals("constructions", StringComparison.OrdinalIgnoreCase) || command.Equals("construction", StringComparison.OrdinalIgnoreCase))
+        {
+            return HandleListConstructionsCommand(session);
+        }
+
+        if (command.StartsWith("cancel ", StringComparison.OrdinalIgnoreCase))
+        {
+            return HandleCancelConstructionCommand(session, command[7..].Trim());
+        }
+
+        if (command.StartsWith("map", StringComparison.OrdinalIgnoreCase))
+        {
+            return HandleMapCommand(session, command);
+        }
+
         return "Unknown command. Type 'help' for available commands.";
+    }
+
+    private static string HandleBuildCommand(GameSession session, string args)
+    {
+        RequireSnapshot(session);
+
+        var parts = args.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 3)
+        {
+            return "Usage: build <BuildingType> <x> <y>\nExample: build House 10 20";
+        }
+
+        if (!Enum.TryParse<BuildingType>(parts[0], ignoreCase: true, out var buildingType))
+        {
+            return $"Unknown building type: {parts[0]}. Valid types: {string.Join(", ", Enum.GetNames(typeof(BuildingType)))}";
+        }
+
+        if (!int.TryParse(parts[1], out var x) || !int.TryParse(parts[2], out var y))
+        {
+            return "Coordinates must be integers.";
+        }
+
+        var location = new GridPosition(x, y);
+        var (request, construction) = session.RequestConstruction(buildingType, location);
+
+        if (!request.IsValid)
+        {
+            var errors = string.Join(Environment.NewLine + "  ", request.ValidationErrors);
+            return $"Construction request failed:\n  {errors}";
+        }
+
+        if (construction == null)
+        {
+            return "Construction request was rejected.";
+        }
+
+        var cost = ConstructionCosts.GetCost(buildingType);
+        var duration = ConstructionCosts.GetDurationTicks(buildingType);
+        return $"Construction started at {location}.\n" +
+               $"  Type: {buildingType}\n" +
+               $"  Cost: {cost}\n" +
+               $"  Duration: {duration} ticks\n" +
+               $"  Construction ID: {construction.Id}\n" +
+               $"  Progress: {construction.GetProgress():F1}%";
+    }
+
+    private static string HandleDemolishCommand(GameSession session, string args)
+    {
+        RequireSnapshot(session);
+
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            return "Usage: demolish <building_id>";
+        }
+
+        var snapshot = session.Snapshot!;
+        var buildings = snapshot.World.Regions[0].Cities[0].Districts[0].Plots.SelectMany(plot => plot.Buildings);
+        var building = buildings.FirstOrDefault(b => b.Id.ToString().Contains(args, StringComparison.OrdinalIgnoreCase));
+
+        if (building == null)
+        {
+            return $"Building not found: {args}";
+        }
+
+        if (session.DemolishBuilding(building.Id))
+        {
+            return $"Demolished {building.Name} at {building.Location}.";
+        }
+
+        return $"Failed to demolish {building.Name}. Check funds or building status.";
+    }
+
+    private static string HandleListConstructionsCommand(GameSession session)
+    {
+        if (!session.IsWorldCreated)
+        {
+            return "Create a world first.";
+        }
+
+        var constructions = session.GetActiveConstructions();
+        if (constructions.Count == 0)
+        {
+            return "No active construction projects.";
+        }
+
+        var lines = new List<string> { "Active Construction Projects:" };
+        foreach (var kvp in constructions)
+        {
+            var construction = kvp.Value;
+            lines.Add($"  ID: {construction.Id}");
+            lines.Add($"    Type: {construction.BuildingType} at {construction.Location}");
+            lines.Add($"    State: {construction.State}");
+            lines.Add($"    Progress: {construction.GetProgress():F1}% ({construction.TicksElapsed}/{construction.DurationTicks} ticks)");
+            lines.Add($"    Cost: {construction.Cost}");
+            lines.Add("");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string HandleCancelConstructionCommand(GameSession session, string args)
+    {
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            return "Usage: cancel <construction_id>";
+        }
+
+        var constructions = session.GetActiveConstructions();
+        var id = constructions.Keys.FirstOrDefault(k => k.Value.ToString().Contains(args, StringComparison.OrdinalIgnoreCase));
+
+        if (id.Value == Guid.Empty)
+        {
+            return $"Construction not found: {args}";
+        }
+
+        if (session.CancelConstruction(id))
+        {
+            return $"Construction {id} cancelled and refunded.";
+        }
+
+        return $"Failed to cancel construction {id}. It may already be complete.";
+    }
+
+    private static string HandleMapCommand(GameSession session, string command)
+    {
+        var renderer = session.GetMapRenderer();
+        if (renderer == null)
+        {
+            return "No map available. Create a world first.";
+        }
+
+        var args = command.Length > 3 ? command[4..].Trim() : string.Empty;
+
+        if (args.Equals("coords", StringComparison.OrdinalIgnoreCase))
+        {
+            return renderer.RenderWithCoordinates();
+        }
+
+        if (args.Equals("legend", StringComparison.OrdinalIgnoreCase))
+        {
+            return renderer.RenderWithLegend();
+        }
+
+        if (args.Equals("buildings", StringComparison.OrdinalIgnoreCase))
+        {
+            return renderer.RenderBuildingSummary();
+        }
+
+        if (args.Equals("plots", StringComparison.OrdinalIgnoreCase))
+        {
+            return renderer.RenderPlotSummary();
+        }
+
+        if (args.StartsWith("region ", StringComparison.OrdinalIgnoreCase))
+        {
+            var regionArgs = args[7..].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (regionArgs.Length != 4 || !int.TryParse(regionArgs[0], out var x1) || !int.TryParse(regionArgs[1], out var y1) ||
+                !int.TryParse(regionArgs[2], out var x2) || !int.TryParse(regionArgs[3], out var y2))
+            {
+                return "Usage: map region <x1> <y1> <x2> <y2>";
+            }
+
+            return renderer.RenderRegion(new GridPosition(x1, y1), new GridPosition(x2, y2));
+        }
+
+        if (args.StartsWith("cell ", StringComparison.OrdinalIgnoreCase))
+        {
+            var cellArgs = args[5..].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (cellArgs.Length != 2 || !int.TryParse(cellArgs[0], out var x) || !int.TryParse(cellArgs[1], out var y))
+            {
+                return "Usage: map cell <x> <y>";
+            }
+
+            return renderer.RenderCellDetail(new GridPosition(x, y));
+        }
+
+        // Default: render full map
+        return renderer.RenderWithLegend();
     }
 
     private static string BuildSummary(SimulationSliceSnapshot snapshot)

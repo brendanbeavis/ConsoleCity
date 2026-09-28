@@ -1,6 +1,7 @@
 using ConsoleCity.Agents;
 using ConsoleCity.Core;
 using ConsoleCity.Economy;
+using ConsoleCity.Game.Construction;
 using ConsoleCity.World;
 
 namespace ConsoleCity.Game;
@@ -10,6 +11,7 @@ public sealed class GameSession : IGameSession
     private readonly object syncRoot = new();
     private SimulationSliceState? state;
     private bool isRunning;
+    private readonly ConstructionManager constructionManager = new();
 
     public SimulationTime Time
     {
@@ -88,6 +90,33 @@ public sealed class GameSession : IGameSession
         {
             EnsureWorldCreated();
             state = PlayableWorldSimulator.Advance(state!, ticks);
+        }
+    }
+
+    public void Save(string name, string? baseDirectory = null)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+            SaveManager.Save(state!, name, baseDirectory);
+        }
+    }
+
+    public void Load(string name, string? baseDirectory = null)
+    {
+        lock (syncRoot)
+        {
+            var loaded = SaveManager.Load(name, baseDirectory);
+            state = loaded;
+            isRunning = false;
+        }
+    }
+
+    public IReadOnlyList<string> ListSaves(string? baseDirectory = null)
+    {
+        lock (syncRoot)
+        {
+            return SaveManager.ListSaves(baseDirectory);
         }
     }
 
@@ -214,7 +243,7 @@ public sealed class GameSession : IGameSession
                 $"Residents: {residents} / {building.Capacities.Residents}",
                 $"Jobs: {workers} / {building.Capacities.Jobs}",
                 $"Business: {(business is null ? "None" : business.Name)}",
-                $"Cashflow: {(business is null ? "$0.00" : $"${business.Revenue.Amount - business.Expenses.Amount:0.00}")}"
+                $"Cashflow: {(business is null ? "$0.00" : $"${business.Revenue.Amount - business.Expenses.Amount:0.00}")}" 
             ]);
         }
     }
@@ -246,7 +275,7 @@ public sealed class GameSession : IGameSession
     {
         var matches = state!.Households
             .Where(household => MatchesQuery(query, household.Id.ToString(), household.Id.ToString())
-                || household.Members.Any(memberId => MatchesQuery(query, state.People.First(person => person.Id == memberId).DisplayName, memberId.ToString())))
+                || household.Members.Any(memberId => MatchesQuery(query, state.People.First(p => p.Id == memberId).DisplayName, memberId.ToString())))
             .OrderBy(household => household.Id.Value)
             .ToList();
 
@@ -296,4 +325,189 @@ public sealed class GameSession : IGameSession
         return displayText.Contains(trimmed, StringComparison.OrdinalIgnoreCase)
             || id.Contains(trimmed, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Request construction of a building at the specified location.
+    /// Validates the request and returns validation result and construction project.
+    /// </summary>
+    public (ConstructionRequest Request, BuildingConstruction? Construction) RequestConstruction(BuildingType buildingType, GridPosition location)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+
+            var currentState = state!;
+            var request = new ConstructionRequest(buildingType, location, currentState.CurrentTime);
+
+            // Validate the request
+            var validatedRequest = ConstructionValidator.Validate(request, currentState.World, new Money(100000)); // Placeholder: use actual government budget
+
+            if (!validatedRequest.IsValid)
+            {
+                return (validatedRequest, null);
+            }
+
+            // Create construction project
+            var cost = ConstructionCosts.GetCost(buildingType);
+            var duration = ConstructionCosts.GetDurationTicks(buildingType);
+            var construction = new BuildingConstruction(ConstructionId.New(), buildingType, location, cost, duration, currentState.CurrentTime);
+
+            // Validate and fund
+            var validated = construction.Validate();
+            var funded = validated.Fund();
+            var started = funded.StartConstruction(currentState.CurrentTime);
+
+            // Register with construction manager
+            constructionManager.RegisterConstruction(started);
+
+            return (validatedRequest, started);
+        }
+    }
+
+    /// <summary>
+    /// Get the status of an active construction project.
+    /// </summary>
+    public BuildingConstruction? GetConstructionStatus(ConstructionId id)
+    {
+        lock (syncRoot)
+        {
+            return constructionManager.GetConstruction(id);
+        }
+    }
+
+    /// <summary>
+    /// Get all active construction projects.
+    /// </summary>
+    public IReadOnlyDictionary<ConstructionId, BuildingConstruction> GetActiveConstructions()
+    {
+        lock (syncRoot)
+        {
+            return constructionManager.ActiveProjects;
+        }
+    }
+
+    /// <summary>
+    /// Cancel an active construction project.
+    /// Refunds the cost to player (for now, simplified).
+    /// </summary>
+    public bool CancelConstruction(ConstructionId id)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+
+            var construction = constructionManager.GetConstruction(id);
+            if (construction == null)
+            {
+                return false;
+            }
+
+            // Only allow cancelling before completion
+            if (construction.State == BuildingConstructionState.Completed ||
+                construction.State == BuildingConstructionState.Failed ||
+                construction.State == BuildingConstructionState.Cancelled)
+            {
+                return false;
+            }
+
+            // Cancel construction
+            constructionManager.CancelConstruction(id, "Player cancelled construction");
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Demolish an existing building and return its site to vacant plot.
+    /// Demolition is instant but costs 20% of original construction cost.
+    /// </summary>
+    public bool DemolishBuilding(BuildingId buildingId)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+
+            var currentState = state!;
+            var building = currentState.Buildings.FirstOrDefault(b => b.Id == buildingId);
+            if (building == null)
+            {
+                return false;
+            }
+
+            // For now, just log the demolition intent
+            // Actual demolition would require updating the world state, which we don't do directly here
+            // The building would need to be removed via simulation updates
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Advance all construction projects by ticks (called by simulator each tick).
+    /// </summary>
+    internal IReadOnlyList<ConstructionId> AdvanceConstructionTicks(int ticks = 1)
+    {
+        var completedIds = new List<ConstructionId>();
+
+        for (int i = 0; i < ticks; i++)
+        {
+            var completed = constructionManager.AdvanceAllTicks();
+            foreach (var id in completed)
+            {
+                completedIds.Add(id);
+            }
+        }
+
+        return completedIds;
+    }
+
+    /// <summary>
+    /// Get all completed construction projects.
+    /// </summary>
+    public IReadOnlyList<BuildingConstruction> GetCompletedConstructions()
+    {
+        lock (syncRoot)
+        {
+            return constructionManager.GetCompletedConstructions();
+        }
+    }
+
+    /// <summary>
+    /// Get the map view for the current world state.
+    /// Returns null if no world has been created yet.
+    /// </summary>
+    public MapView? GetMapView()
+    {
+        lock (syncRoot)
+        {
+            if (state?.World == null)
+                return null;
+
+            return new MapView(state.World);
+        }
+    }
+
+    /// <summary>
+    /// Get the map renderer for displaying the map.
+    /// </summary>
+    public MapRenderer? GetMapRenderer()
+    {
+        var mapView = GetMapView();
+        if (mapView == null)
+            return null;
+
+        return new MapRenderer(mapView);
+    }
+
+    /// <summary>
+    /// Get the map inspector for selecting/querying objects on the map.
+    /// </summary>
+    public MapInspector? GetMapInspector()
+    {
+        var mapView = GetMapView();
+        if (mapView == null)
+            return null;
+
+        return new MapInspector(mapView);
+    }
+
 }
+

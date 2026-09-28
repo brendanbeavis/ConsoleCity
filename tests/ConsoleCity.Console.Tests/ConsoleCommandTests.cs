@@ -1,4 +1,6 @@
 using System.Linq;
+using System.IO;
+using System;
 using ConsoleCity.Game;
 using ConsoleCity.Console;
 
@@ -35,6 +37,8 @@ public class ConsoleCommandTests
         var output = Program.ProcessCommand(session, "help");
         Assert.Contains("summary", output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("find person", output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("save <name>", output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("load <name>", output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -92,6 +96,30 @@ public class ConsoleCommandTests
         var output = Program.ProcessCommand(session, $"inspect person {person.Id}");
         Assert.Contains("PERSON", output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(person.DisplayName, output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SaveLoad_Roundtrip_RestoresState()
+    {
+        var session = new GameSession();
+        session.CreateNewWorld(42);
+        session.Advance(5);
+        var timeBefore = session.Time;
+        var peopleBefore = session.Snapshot!.Population.People.Count;
+
+        var saveDir = Path.Combine(Path.GetTempPath(), "ConsoleCitySaves", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(saveDir);
+
+        session.Save("testsave", saveDir);
+
+        var restored = new GameSession();
+        restored.Load("testsave", saveDir);
+
+        Assert.Equal(timeBefore, restored.Time);
+        Assert.Equal(peopleBefore, restored.Snapshot!.Population.People.Count);
+
+        restored.Advance(2);
+        Assert.Equal(timeBefore.Advance(2).Tick, restored.Time.Tick);
     }
 
     [Fact]

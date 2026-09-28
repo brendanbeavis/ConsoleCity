@@ -129,7 +129,36 @@ public class SimulationEngineAdvancedTests
 
     private sealed class TestInfrastructureModel : IInfrastructureModel
     {
-        public InfrastructureSnapshot Snapshot { get; } = new(new SimulationTime(0), [], []);
+        public InfrastructureSnapshot Snapshot { get; private set; } = new(new SimulationTime(0), Array.Empty<UtilityNetwork>(), Array.Empty<InfrastructureEvent>());
+
+        public InfrastructureAdvanceResult Advance(SimulationTime currentTime)
+        {
+            Snapshot = new InfrastructureSnapshot(currentTime, Snapshot.Networks, Snapshot.Events, Snapshot.Connections);
+            return new InfrastructureAdvanceResult(Snapshot, Array.Empty<InfrastructureEvent>());
+        }
+
+        public void SetNodeDemand(string nodeId, decimal demand) { }
+        public void SetNodeOperational(string nodeId, bool isOperational) { }
+        public void SetEdgeOperational(string edgeId, bool isOperational) { }
+        public void SetConnections(IReadOnlyList<UtilityConnection> connections) => Snapshot = Snapshot.WithConnections(connections);
+        public void RegisterConnection(string consumerId, string nodeId)
+        {
+            var conns = Snapshot.Connections.ToList();
+            var existing = conns.FirstOrDefault(c => c.ConsumerId == consumerId);
+            if (existing is not null) conns.Remove(existing);
+            conns.Add(new UtilityConnection(consumerId, nodeId));
+            Snapshot = Snapshot.WithConnections(conns);
+        }
+
+        public void UnregisterConnection(string consumerId) => Snapshot = Snapshot.WithConnections(Snapshot.Connections.Where(c => c.ConsumerId != consumerId).ToList());
+
+        public UtilityConnection? GetConnection(string consumerId) => Snapshot.Connections.FirstOrDefault(c => c.ConsumerId == consumerId);
+
+        public IReadOnlyList<UtilityConnection> GetConnectionsForNode(string nodeId) => Snapshot.Connections.Where(c => c.NodeId == nodeId).ToList();
+
+        public string? GetNodeIdForConsumer(string consumerId) => GetConnection(consumerId)?.NodeId;
+
+        public IReadOnlyList<string> GetConsumersForNode(string nodeId) => GetConnectionsForNode(nodeId).Select(c => c.ConsumerId).ToList();
     }
 
     private sealed class TestTransportModel : ITransportModel

@@ -10,18 +10,23 @@ public sealed record class InfrastructureSnapshot
 
     public IReadOnlyList<InfrastructureEvent> Events { get; }
 
-    public InfrastructureSnapshot(SimulationTime capturedAt, IReadOnlyList<UtilityNetwork> networks, IReadOnlyList<InfrastructureEvent> events)
+    public IReadOnlyList<UtilityConnection> Connections { get; }
+
+    public InfrastructureSnapshot(SimulationTime capturedAt, IReadOnlyList<UtilityNetwork> networks, IReadOnlyList<InfrastructureEvent> events, IReadOnlyList<UtilityConnection>? connections = null)
     {
         ArgumentNullException.ThrowIfNull(networks);
         ArgumentNullException.ThrowIfNull(events);
         CapturedAt = capturedAt;
         Networks = networks;
         Events = events;
+        Connections = connections ?? Array.Empty<UtilityConnection>();
     }
 
-    public static InfrastructureSnapshot Empty { get; } = new(new SimulationTime(0), Array.Empty<UtilityNetwork>(), Array.Empty<InfrastructureEvent>());
+    public static InfrastructureSnapshot Empty { get; } = new(new SimulationTime(0), Array.Empty<UtilityNetwork>(), Array.Empty<InfrastructureEvent>(), Array.Empty<UtilityConnection>());
 
-    public InfrastructureSnapshot WithNetworks(IReadOnlyList<UtilityNetwork> networks) => new(CapturedAt, networks, Events);
+    public InfrastructureSnapshot WithNetworks(IReadOnlyList<UtilityNetwork> networks) => new(CapturedAt, networks, Events, Connections);
+
+    public InfrastructureSnapshot WithConnections(IReadOnlyList<UtilityConnection> connections) => new(CapturedAt, Networks, Events, connections);
 
     public InfrastructureSnapshot WithNode(string nodeId, Func<UtilityNode, UtilityNode> updater)
     {
@@ -31,7 +36,7 @@ public sealed record class InfrastructureSnapshot
             var node = network.GetNode(nodeId);
             return node is null ? network : network.WithNode(nodeId, updater);
         }).ToList();
-        return new InfrastructureSnapshot(CapturedAt, networks, Events);
+        return new InfrastructureSnapshot(CapturedAt, networks, Events, Connections);
     }
 
     public InfrastructureSnapshot WithEdge(string edgeId, Func<UtilityEdge, UtilityEdge> updater)
@@ -42,6 +47,6 @@ public sealed record class InfrastructureSnapshot
             var edge = network.GetEdge(edgeId);
             return edge is null ? network : network.WithEdge(edgeId, updater);
         }).ToList();
-        return new InfrastructureSnapshot(CapturedAt, networks, Events);
+        return new InfrastructureSnapshot(CapturedAt, networks, Events, Connections);
     }
 }

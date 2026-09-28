@@ -4,17 +4,23 @@ using ConsoleCity.World;
 
 namespace ConsoleCity.Economy;
 
-public sealed class SimpleEconomyModel : IEconomyModel
+public sealed class SimpleEconomyModel : IEconomyModel, IEconomyEngine
+
 {
     public EconomySnapshot Snapshot { get; private set; }
 
-    public SimpleEconomyModel(EconomySnapshot snapshot)
+    public IEconomyTransportBridge? TransportBridge { get; }
+
+    private readonly List<GoodsInTransit> goodsInTransit = new();
+
+    public SimpleEconomyModel(EconomySnapshot snapshot, IEconomyTransportBridge? transportBridge = null)
     {
         Snapshot = snapshot;
+        TransportBridge = transportBridge;
     }
 
     public SimpleEconomyModel()
-        : this(new EconomySnapshot(new SimulationTime(0), [], [], new EconomicIndicators(0m, Money.Zero, Money.Zero, Money.Zero, Money.Zero, 0)))
+        : this(new EconomySnapshot(new SimulationTime(0), [], [], new EconomicIndicators(0m, Money.Zero, Money.Zero, Money.Zero, Money.Zero, 0)), null)
     {
     }
 
@@ -31,15 +37,72 @@ public sealed class SimpleEconomyModel : IEconomyModel
         var prices = Snapshot.Prices.ToDictionary(price => price.ResourceId, price => price);
         var recipes = Snapshot.Recipes.ToDictionary(recipe => recipe.RecipeKey, recipe => recipe);
 
+        // Process completed deliveries first: add goods to destination inventory.
+        var deliveredGoods = new List<DeliveredGoods>();
+        if (TransportBridge is not null)
+        {
+            // Use reflection to call GetCompletedDeliveries if available.
+            var getCompletedMethod = TransportBridge.GetType().GetMethod("GetCompletedDeliveries");
+            if (getCompletedMethod is not null)
+            {
+                var completed = (IReadOnlyList<DeliveredGoods>?)getCompletedMethod.Invoke(TransportBridge, null) ?? new List<DeliveredGoods>();
+                foreach (var delivery in completed)
+                {
+                    deliveredGoods.Add(delivery);
+                    if (delivery.Destination is not null)
+                    {
+                        var targetBusiness = businesses.FirstOrDefault(b => b.Location == delivery.Destination);
+                        if (targetBusiness is not null)
+                        {
+                            var inventory = targetBusiness.Inventory.ToList();
+                            AddResource(inventory, delivery.ResourceId, delivery.Quantity.Value);
+                            var updatedBusiness = new BusinessModel(
+                                targetBusiness.Id,
+                                targetBusiness.Name,
+                                targetBusiness.ActorType,
+                                targetBusiness.State,
+                                targetBusiness.FoundedAt,
+                                targetBusiness.BuildingId,
+                                targetBusiness.Location,
+                                targetBusiness.Cash,
+                                targetBusiness.Revenue,
+                                targetBusiness.Expenses,
+                                targetBusiness.WagePerEmployee,
+                                targetBusiness.Employees,
+                                inventory,
+                                targetBusiness.RecipeKeys);
+                            var businessIndex = businesses.IndexOf(targetBusiness);
+                            businesses[businessIndex] = updatedBusiness;
+                        }
+                    }
+                    goodsInTransit.RemoveAll(g => g.JourneyId == delivery.JourneyId);
+                    events.Add(new EconomicEvent(
+                        EconomicEventType.ConsumptionRecorded,
+                        new SimulationTick(currentTime.Tick),
+                        $"Delivery of {delivery.ResourceId.Value} arrived.",
+                        0.1d,
+                        resourceId: delivery.ResourceId,
+                        amount: new Money(delivery.Quantity.Value)));
+                }
+            }
+        }
+
         (businesses, peopleById, householdsById) = ProcessPayroll(currentTime, businesses, peopleById, householdsById, events, transfers);
-        businesses = ProcessProduction(currentTime, businesses, recipes, prices, events);
-        businesses = ProcessConsumption(currentTime, businesses, prices, householdsById, events, transfers);
+        var transportRequests = new List<GoodsTransportRequest>();
+        businesses = ProcessProduction(currentTime, businesses, recipes, prices, events, transportRequests, TransportBridge);
+        businesses = ProcessConsumption(currentTime, businesses, prices, householdsById, events, transfers, transportRequests, TransportBridge);
         prices = UpdatePrices(currentTime, businesses, prices, recipes, householdsById, events);
         var government = UpdateGovernmentFinance(currentTime, businesses, events);
         var indicators = BuildIndicators(businesses, peopleById.Values, householdsById.Values, government);
 
+        // Track new transport requests as in-transit goods.
+        foreach (var req in transportRequests)
+        {
+            goodsInTransit.Add(new GoodsInTransit(req.Id, req.ResourceId, req.Quantity, req.To));
+        }
+
         Snapshot = new EconomySnapshot(currentTime, prices.Values.ToList(), Snapshot.Recipes, indicators, businesses, government, events);
-        return new EconomyStepResult(Snapshot, peopleById.Values.ToList(), householdsById.Values.ToList(), events, transfers);
+        return new EconomyStepResult(Snapshot, peopleById.Values.ToList(), householdsById.Values.ToList(), events, transfers, transportRequests, deliveredGoods);
     }
 
     private static (List<BusinessModel> Businesses, Dictionary<PersonId, PersonAgent> PeopleById, Dictionary<HouseholdId, HouseholdAgent> HouseholdsById) ProcessPayroll(
@@ -169,7 +232,9 @@ public sealed class SimpleEconomyModel : IEconomyModel
         List<BusinessModel> businesses,
         IReadOnlyDictionary<string, ProductionRecipe> recipes,
         IReadOnlyDictionary<ResourceId, PriceQuote> prices,
-        List<EconomicEvent> events)
+        List<EconomicEvent> events,
+        List<GoodsTransportRequest> transportRequests,
+        IEconomyTransportBridge? transportBridge)
     {
         for (var i = 0; i < businesses.Count; i++)
         {
@@ -191,7 +256,18 @@ public sealed class SimpleEconomyModel : IEconomyModel
 
                 if (!HasInputs(inventory, recipe.Inputs))
                 {
-                    events.Add(new EconomicEvent(EconomicEventType.ShortageDetected, new SimulationTick(currentTime.Tick), $"{business.Name} lacks inputs for {recipeKey}.", 0.5d, businessId: business.Id));
+                    // Identify missing inputs and request transport to replenish from external markets or suppliers.
+                    foreach (var input in recipe.Inputs)
+                    {
+                        var available = inventory.Where(item => item.ResourceId == input.ResourceId).Sum(item => item.Quantity.Value);
+                        var missing = Math.Max(0m, input.Quantity.Value - available);
+                        if (missing <= 0m) continue;
+                        var req = new GoodsTransportRequest(EntityId.New(), input.ResourceId, new Quantity(missing), null, business.Location);
+                        transportRequests.Add(req);
+                        transportBridge?.RequestTransport(req);
+                        events.Add(new EconomicEvent(EconomicEventType.ShortageDetected, new SimulationTick(currentTime.Tick), $"{business.Name} lacks {input.ResourceId.Value} (need {missing}). Transport requested.", 0.5d, businessId: business.Id, resourceId: input.ResourceId));
+                    }
+
                     continue;
                 }
 
@@ -240,7 +316,9 @@ public sealed class SimpleEconomyModel : IEconomyModel
         IReadOnlyDictionary<ResourceId, PriceQuote> prices,
         Dictionary<HouseholdId, HouseholdAgent> householdsById,
         List<EconomicEvent> events,
-        List<EconomicTransfer> transfers)
+        List<EconomicTransfer> transfers,
+        List<GoodsTransportRequest> transportRequests,
+        IEconomyTransportBridge? transportBridge)
     {
         var foodQuote = prices.Values.FirstOrDefault(quote => IsFoodResource(quote.ResourceId));
         if (foodQuote is null)
@@ -260,7 +338,11 @@ public sealed class SimpleEconomyModel : IEconomyModel
             var businessIndex = updatedBusinesses.FindIndex(business => HasResource(business.Inventory, foodQuote.ResourceId));
             if (businessIndex < 0)
             {
-                events.Add(new EconomicEvent(EconomicEventType.ShortageDetected, new SimulationTick(currentTime.Tick), $"{household.Id} could not buy food.", 0.4d, householdId: household.Id, resourceId: foodQuote.ResourceId));
+                // No supplier has the resource: request transport from external market to the household.
+                var req = new GoodsTransportRequest(EntityId.New(), foodQuote.ResourceId, new Quantity(household.FoodDemand.Value), null, household.HomeLocation);
+                transportRequests.Add(req);
+                transportBridge?.RequestTransport(req);
+                events.Add(new EconomicEvent(EconomicEventType.ShortageDetected, new SimulationTick(currentTime.Tick), $"{household.Id} could not buy food. Transport requested.", 0.4d, householdId: household.Id, resourceId: foodQuote.ResourceId));
                 continue;
             }
 

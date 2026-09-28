@@ -7,4 +7,6 @@ public sealed record EconomyStepResult(
     IReadOnlyList<PersonAgent> People,
     IReadOnlyList<HouseholdAgent> Households,
     IReadOnlyList<EconomicEvent> Events,
-    IReadOnlyList<EconomicTransfer> Transfers);
+    IReadOnlyList<EconomicTransfer> Transfers,
+    IReadOnlyList<GoodsTransportRequest> TransportRequests,
+    IReadOnlyList<DeliveredGoods> DeliveredGoods);

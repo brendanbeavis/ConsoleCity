@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using ConsoleCity.Core;
 
 namespace ConsoleCity.Infrastructure;
@@ -13,6 +15,52 @@ public sealed class SimpleInfrastructureModel : IInfrastructureModel
     {
         Snapshot = snapshot ?? InfrastructureSnapshot.Empty;
         InitializeHistory(Snapshot);
+    }
+
+    public void SetConnections(IReadOnlyList<UtilityConnection> connections)
+    {
+        Snapshot = Snapshot.WithConnections(connections);
+    }
+
+    public void RegisterConnection(string consumerId, string nodeId)
+    {
+        ArgumentNullException.ThrowIfNull(consumerId);
+        ArgumentNullException.ThrowIfNull(nodeId);
+        var conns = Snapshot.Connections.ToList();
+        var existing = conns.FirstOrDefault(c => c.ConsumerId == consumerId);
+        if (existing is not null) conns.Remove(existing);
+        conns.Add(new UtilityConnection(consumerId, nodeId));
+        Snapshot = Snapshot.WithConnections(conns);
+    }
+
+    public void UnregisterConnection(string consumerId)
+    {
+        ArgumentNullException.ThrowIfNull(consumerId);
+        var conns = Snapshot.Connections.Where(c => c.ConsumerId != consumerId).ToList();
+        Snapshot = Snapshot.WithConnections(conns);
+    }
+
+    public UtilityConnection? GetConnection(string consumerId)
+    {
+        if (string.IsNullOrWhiteSpace(consumerId)) return null;
+        return Snapshot.Connections.FirstOrDefault(c => c.ConsumerId == consumerId);
+    }
+
+    public IReadOnlyList<UtilityConnection> GetConnectionsForNode(string nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId)) return Array.Empty<UtilityConnection>();
+        return Snapshot.Connections.Where(c => c.NodeId == nodeId).ToList();
+    }
+
+    public string? GetNodeIdForConsumer(string consumerId)
+    {
+        var conn = GetConnection(consumerId);
+        return conn?.NodeId;
+    }
+
+    public IReadOnlyList<string> GetConsumersForNode(string nodeId)
+    {
+        return GetConnectionsForNode(nodeId).Select(c => c.ConsumerId).ToList();
     }
 
     public void SetNodeDemand(string nodeId, decimal demand)
@@ -43,7 +91,7 @@ public sealed class SimpleInfrastructureModel : IInfrastructureModel
             events.AddRange(computed.Events);
         }
 
-        Snapshot = new InfrastructureSnapshot(currentTime, updatedNetworks, events);
+        Snapshot = new InfrastructureSnapshot(currentTime, updatedNetworks, events, Snapshot.Connections);
         RefreshHistory(Snapshot);
         return new InfrastructureAdvanceResult(Snapshot, events);
     }
@@ -64,6 +112,12 @@ public sealed class SimpleInfrastructureModel : IInfrastructureModel
 
             lastShortageStates[network.UtilityType] = false;
         }
+
+        // Ensure connections exist in history map for stability (no-op currently)
+        foreach (var conn in snapshot.Connections)
+        {
+            // placeholder: could store connection history if needed
+        }
     }
 
     private void RefreshHistory(InfrastructureSnapshot snapshot)
@@ -81,6 +135,12 @@ public sealed class SimpleInfrastructureModel : IInfrastructureModel
             }
 
             lastShortageStates[network.UtilityType] = network.Shortage > 0m;
+        }
+
+        // connections do not affect operational history directly but track presence
+        foreach (var conn in snapshot.Connections)
+        {
+            // placeholder
         }
     }
 

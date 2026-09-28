@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ConsoleCity.World\ConsoleCity.World.csproj" />
+    <ProjectReference Include="..\..\src\ConsoleCity.Core\ConsoleCity.Core.csproj" />
+    <ProjectReference Include="..\..\src\ConsoleCity.Game\ConsoleCity.Game.csproj" />
   </ItemGroup>
 
 </Project>

@@ -8,6 +8,9 @@ public enum GameCommandType
     Build,
     Zone,
     Inspect,
+    Demolish,
+    CancelConstruction,
+    ListConstructions,
     Save,
     Load
 }

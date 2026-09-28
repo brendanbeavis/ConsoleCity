@@ -27,4 +27,10 @@ public interface IGameSession
     string InspectHousehold(string query);
 
     string InspectBuilding(string query);
+
+    void Save(string name, string? baseDirectory = null);
+
+    void Load(string name, string? baseDirectory = null);
+
+    IReadOnlyList<string> ListSaves(string? baseDirectory = null);
 }

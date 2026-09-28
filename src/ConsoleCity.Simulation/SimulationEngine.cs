@@ -1,4 +1,5 @@
 using ConsoleCity.Core;
+using ConsoleCity.Services;
 
 namespace ConsoleCity.Simulation;
 
@@ -9,6 +10,8 @@ public sealed class SimulationEngine : ISimulationEngine
     private readonly SimulationContext context;
     private readonly SimulationEventProcessor eventProcessor = new();
     private readonly SimulationEngineOptions options;
+    private readonly HashSet<string> processedInfrastructureEvents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> processedServiceEvents = new(StringComparer.OrdinalIgnoreCase);
 
     public SimulationMode Mode { get; private set; }
 
@@ -83,6 +86,87 @@ public sealed class SimulationEngine : ISimulationEngine
             if (system.TickInterval <= 1 || clock.Now.Tick % system.TickInterval == 0)
             {
                 system.Execute(context);
+
+                // After each system runs, inspect infrastructure snapshot for new events and publish them
+                try
+                {
+                    var infra = context.Infrastructure;
+                    if (infra is not null)
+                    {
+                        foreach (var ie in infra.Snapshot.Events)
+                        {
+                            var key = $"{ie.UtilityType}:{ie.Type}:{ie.TargetId}:{ie.CapturedAt.Tick}";
+                            if (!processedInfrastructureEvents.Add(key))
+                            {
+                                continue;
+                            }
+
+                            // Find a location for the target if possible
+                            GridPosition? location = null;
+                            var network = infra.Snapshot.Networks.FirstOrDefault(n => n.UtilityType == ie.UtilityType);
+                            if (network is not null)
+                            {
+                                var node = network.GetNode(ie.TargetId);
+                                if (node is not null)
+                                {
+                                    location = node.Position;
+                                }
+                                else
+                                {
+                                    var edge = network.GetEdge(ie.TargetId);
+                                    if (edge is not null)
+                                    {
+                                        var from = network.GetNode(edge.FromNodeId);
+                                        if (from is not null)
+                                        {
+                                            location = from.Position;
+                                        }
+                                    }
+                                }
+                            }
+
+                            var severity = ie.Magnitude > 0m ? (double?)Math.Min(1.0, (double)ie.Magnitude) : 0.0;
+                            var ev = new SimulationEvent(EntityId.New(), $"infrastructure.{ie.UtilityType}.{ie.Type}", new SimulationTick(context.Clock.Now.Tick), null, location, ie.Message, severity);
+                            EnqueueEvent(ev);
+                        }
+                    }
+                }
+                catch
+                {
+                    // don't let infrastructure event publishing disrupt system execution
+                }
+
+                // After systems run, inspect services snapshot for new events and publish them
+                try
+                {
+                    var services = context.Services;
+                    if (services is EnhancedServiceModel enhancedServices)
+                    {
+                        foreach (var se in enhancedServices.Events)
+                        {
+                            var key = $"{se.ServiceType}:{se.EventType}:{se.FacilityId}:{context.Clock.Now.Tick}";
+                            if (!processedServiceEvents.Add(key))
+                            {
+                                continue;
+                            }
+
+                            var ev = new SimulationEvent(
+                                EntityId.New(),
+                                $"service.{se.ServiceType}.{se.EventType}",
+                                new SimulationTick(context.Clock.Now.Tick),
+                                null,
+                                se.Location,
+                                se.Description,
+                                se.Severity
+                            );
+                            EnqueueEvent(ev);
+                        }
+                    }
+                }
+                catch
+                {
+                    // don't let service event publishing disrupt system execution
+                }
             }
         }
 

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using ConsoleCity.Core;
 
 namespace ConsoleCity.Agents;
@@ -12,6 +13,7 @@ public sealed record EmploymentRecord
 
     public Money Wage { get; }
 
+    [JsonConstructor]
     public EmploymentRecord(EmploymentState state, OrganizationId? workplaceId = null, GridPosition? workplaceLocation = null, Money? wage = null)
     {
         State = state;
