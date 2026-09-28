@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConsoleCity.Core\ConsoleCity.Core.csproj" />
+    <ProjectReference Include="..\ConsoleCity.Simulation\ConsoleCity.Simulation.csproj" />
+    <ProjectReference Include="..\ConsoleCity.World\ConsoleCity.World.csproj" />
+    <ProjectReference Include="..\ConsoleCity.Agents\ConsoleCity.Agents.csproj" />
+    <ProjectReference Include="..\ConsoleCity.Economy\ConsoleCity.Economy.csproj" />
+    <ProjectReference Include="..\ConsoleCity.Transport\ConsoleCity.Transport.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
