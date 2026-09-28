@@ -96,6 +96,8 @@ guide the long-term development of cities and regions.
 -   `27-data-driven-content.md` --- schemas and configuration strategy.
 -   `28-mvp-and-implementation-roadmap.md` --- staged implementation
     plan.
+-   `29-graphical-ui.md` --- graphical presentation architecture,
+    rendering loop, camera model and Raylib boundary.
 
 ## Design vocabulary
 

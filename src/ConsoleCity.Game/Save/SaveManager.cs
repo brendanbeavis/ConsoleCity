@@ -8,7 +8,7 @@ namespace ConsoleCity.Game;
 
 internal static class SaveManager
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
 
     private static JsonSerializerOptions Options => new JsonSerializerOptions
     {
@@ -60,7 +60,7 @@ internal static class SaveManager
             var json = File.ReadAllText(finalPath);
             var envelope = JsonSerializer.Deserialize<SaveEnvelope>(json, Options) ?? throw new InvalidOperationException("Invalid save file.");
 
-            if (envelope.Version != CurrentVersion)
+            if (envelope.Version is not 1 and not 2)
             {
                 throw new InvalidOperationException($"Unsupported save version: {envelope.Version}");
             }

@@ -12,6 +12,7 @@ internal sealed record SimulationSliceState(
     IReadOnlyList<PersonAgent> People,
     IReadOnlyList<HouseholdAgent> Households,
     EconomySnapshot Economy,
+    GameProgressionState Progression,
     IReadOnlyDictionary<PersonId, BuildingId> HomeBuildingByPerson,
     IReadOnlyDictionary<HouseholdId, BuildingId> HomeBuildingByHousehold,
     IReadOnlyDictionary<PersonId, BuildingId> WorkplaceBuildingByPerson,
@@ -36,6 +37,7 @@ internal sealed record SimulationSliceState(
             World,
             new AgentPopulationSnapshot(CurrentTime, People, Households),
             Economy,
+            Progression,
             ActiveTrips,
             CompletedTrips,
             HouseholdPurchases);

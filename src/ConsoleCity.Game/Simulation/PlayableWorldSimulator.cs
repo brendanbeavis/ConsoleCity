@@ -37,6 +37,7 @@ internal static class PlayableWorldSimulator
         updatedState = ApplyConsumption(updatedState, currentTime);
         updatedState = ApplyPassiveActivities(updatedState, currentTime);
         updatedState = RefreshEconomy(updatedState, currentTime);
+        updatedState = updatedState with { Progression = ProgressionEngine.Advance(updatedState.Progression, updatedState.ToSnapshot()) };
 
         return updatedState;
     }

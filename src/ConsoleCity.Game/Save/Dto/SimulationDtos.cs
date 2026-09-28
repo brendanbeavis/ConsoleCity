@@ -14,7 +14,8 @@ public sealed record SimulationSliceStateDto(
     int HouseholdPurchases,
     IDictionary<string, string> HomeBuildingByPerson,
     IDictionary<string, string> HomeBuildingByHousehold,
-    IDictionary<string, string> WorkplaceBuildingByPerson);
+    IDictionary<string, string> WorkplaceBuildingByPerson,
+    GameProgressionStateDto? Progression = null);
 
 public sealed record PersonDto(
     string Id,
@@ -71,3 +72,51 @@ public sealed record RoutineBlockDto(int StartHour, int EndHour, string? Preferr
 public sealed record GridPositionDto(int X, int Y);
 
 public sealed record CommuteTripDto(string PersonId, GridPositionDto Origin, GridPositionDto Destination, long DepartureTick, long ArrivalTick, string Mode, string Purpose);
+
+public sealed record GameProgressionStateDto(
+    int DevelopmentCredits,
+    decimal ResearchPoints,
+    IList<string> UnlockedTechnologies,
+    IList<ProgressionMilestoneCompletionDto> CompletedMilestones,
+    IList<ProgressionLogEntryDto> Log,
+    IList<GameModifierInstanceDto>? ActiveModifiers = null,
+    IList<GamePolicyInstanceDto>? ActivePolicies = null,
+    GameCycleStateDto? CycleState = null,
+    IList<GameEventRecordDto>? EventLog = null);
+
+public sealed record ProgressionMilestoneCompletionDto(
+    string Id,
+    string Name,
+    long CompletedAtTick,
+    int CreditReward,
+    decimal ResearchReward);
+
+public sealed record ProgressionLogEntryDto(
+    long Tick,
+    string Category,
+    string Message);
+
+public sealed record GameModifierInstanceDto(
+    string Id,
+    long AcquiredAtTick,
+    long? ExpiresAtTick,
+    int Stacks);
+
+public sealed record GamePolicyInstanceDto(
+    string Id,
+    decimal Intensity,
+    long SetAtTick);
+
+public sealed record GameCycleStateDto(
+    int CycleNumber,
+    long StartedAtTick,
+    long NextTransitionAtTick,
+    int CycleLengthTicks);
+
+public sealed record GameEventRecordDto(
+    string Id,
+    string Category,
+    long OccurredAtTick,
+    string Description,
+    double Severity,
+    IList<string> Causes);

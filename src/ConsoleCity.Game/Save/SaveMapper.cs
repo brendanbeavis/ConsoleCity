@@ -30,7 +30,8 @@ namespace ConsoleCity.Game.Save
                 state.HouseholdPurchases,
                 state.HomeBuildingByPerson.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value.ToString()),
                 state.HomeBuildingByHousehold.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value.ToString()),
-                state.WorkplaceBuildingByPerson.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value.ToString()));
+                state.WorkplaceBuildingByPerson.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value.ToString()),
+                ToProgressionDto(state.Progression));
         }
 
         public static SimulationSliceState FromDto(SimulationSliceStateDto dto)
@@ -45,23 +46,25 @@ namespace ConsoleCity.Game.Save
             var homeByHousehold = dto.HomeBuildingByHousehold.ToDictionary(kv => HouseholdIdFromString(kv.Key), kv => BuildingIdFromString(kv.Value));
             var workByPerson = dto.WorkplaceBuildingByPerson.ToDictionary(kv => PersonIdFromString(kv.Key), kv => BuildingIdFromString(kv.Value));
 
-            // Recreate minimal WorldModel from existing runtime constructors: currently we cannot fully reconstruct World so use placeholders where required
-            // For now load an empty world with same seed and tick createdAt
-            var world = new WorldModel(new WorldId(Guid.NewGuid()), dto.Seed, new SimulationTime(dto.CurrentTick), Array.Empty<RegionModel>(), Array.Empty<TerrainCellModel>(), default);
+            var baselineState = PlayableWorldFactory.Create(dto.Seed);
 
-            return new SimulationSliceState(
-                dto.Seed,
-                new SimulationTime(dto.CurrentTick),
-                world,
-                people,
-                households,
-                new EconomySnapshot(new SimulationTime(dto.CurrentTick), Array.Empty<PriceQuote>(), Array.Empty<ProductionRecipe>(), new EconomicIndicators(0m, Money.Zero, Money.Zero, Money.Zero, Money.Zero, 0)),
-                new Dictionary<PersonId, BuildingId>(homeByPerson),
-                new Dictionary<HouseholdId, BuildingId>(homeByHousehold),
-                new Dictionary<PersonId, BuildingId>(workByPerson),
-                activeTrips,
-                dto.CompletedTrips,
-                dto.HouseholdPurchases);
+            var state = baselineState with
+            {
+                CurrentTime = new SimulationTime(dto.CurrentTick),
+                People = people,
+                Households = households,
+                HomeBuildingByPerson = new Dictionary<PersonId, BuildingId>(homeByPerson),
+                HomeBuildingByHousehold = new Dictionary<HouseholdId, BuildingId>(homeByHousehold),
+                WorkplaceBuildingByPerson = new Dictionary<PersonId, BuildingId>(workByPerson),
+                ActiveTrips = activeTrips,
+                CompletedTrips = dto.CompletedTrips,
+                HouseholdPurchases = dto.HouseholdPurchases
+            };
+
+            return state with
+            {
+                Progression = dto.Progression is null ? ProgressionEngine.RebuildFromSnapshot(state.ToSnapshot()) : FromProgressionDto(dto.Progression)
+            };
         }
 
         private static PersonAgent MapPerson(PersonDto dto)
@@ -136,6 +139,57 @@ namespace ConsoleCity.Game.Save
         private static CommuteTrip MapTrip(CommuteTripDto dto)
         {
             return new CommuteTrip(PersonIdFromString(dto.PersonId), new GridPosition(dto.Origin.X, dto.Origin.Y), new GridPosition(dto.Destination.X, dto.Destination.Y), new SimulationTime(dto.DepartureTick), new SimulationTime(dto.ArrivalTick), Enum.Parse<TransportMode>(dto.Mode, true), dto.Purpose);
+        }
+
+        private static GameProgressionStateDto ToProgressionDto(GameProgressionState progression)
+        {
+            return new GameProgressionStateDto(
+                progression.DevelopmentCredits,
+                progression.ResearchPoints,
+                progression.UnlockedTechnologies.Select(technologyId => technologyId.ToString()).ToList(),
+                progression.CompletedMilestones.Select(milestone => new ProgressionMilestoneCompletionDto(
+                    milestone.Id.ToString(),
+                    milestone.Name,
+                    milestone.CompletedAt.Tick,
+                    milestone.CreditReward,
+                    milestone.ResearchReward)).ToList(),
+                progression.Log.Select(entry => new ProgressionLogEntryDto(entry.At.Tick, entry.Category, entry.Message)).ToList(),
+                progression.ActiveModifiers.Select(modifier => new GameModifierInstanceDto(
+                    modifier.Id.ToString(),
+                    modifier.AcquiredAt.Tick,
+                    modifier.ExpiresAt?.Tick,
+                    modifier.Stacks)).ToList(),
+                progression.ActivePolicies.Select(policy => new GamePolicyInstanceDto(policy.Id.ToString(), policy.Intensity, policy.SetAt.Tick)).ToList(),
+                new GameCycleStateDto(progression.CycleState.CycleNumber, progression.CycleState.StartedAt.Tick, progression.CycleState.NextTransitionAt.Tick, progression.CycleState.CycleLengthTicks),
+                progression.EventLog.Select(ev => new GameEventRecordDto(ev.Id, ev.Category.ToString(), ev.OccurredAt.Tick, ev.Description, ev.Severity, ev.Causes.ToList())).ToList());
+        }
+
+        private static GameProgressionState FromProgressionDto(GameProgressionStateDto dto)
+        {
+            return new GameProgressionState(
+                dto.DevelopmentCredits,
+                dto.ResearchPoints,
+                dto.UnlockedTechnologies.Select(technology => new TechnologyId(technology)).ToList(),
+                dto.CompletedMilestones.Select(milestone => new ProgressionMilestoneCompletion(
+                    new MilestoneId(milestone.Id),
+                    milestone.Name,
+                    new SimulationTime(milestone.CompletedAtTick),
+                    milestone.CreditReward,
+                    milestone.ResearchReward)).ToList(),
+                dto.Log.Select(entry => new ProgressionLogEntry(new SimulationTime(entry.Tick), entry.Category, entry.Message)).ToList(),
+                (dto.ActiveModifiers ?? Array.Empty<GameModifierInstanceDto>()).Select(modifier => new GameModifierInstance(
+                    new GameModifierId(modifier.Id),
+                    new SimulationTime(modifier.AcquiredAtTick),
+                    modifier.ExpiresAtTick is null ? null : new SimulationTime(modifier.ExpiresAtTick.Value),
+                    modifier.Stacks)).ToList(),
+                (dto.ActivePolicies ?? Array.Empty<GamePolicyInstanceDto>()).Select(policy => new GamePolicyInstance(
+                    new GamePolicyId(policy.Id),
+                    policy.Intensity,
+                    new SimulationTime(policy.SetAtTick))).ToList(),
+                dto.CycleState is null
+                    ? GameCycleState.CreateInitial(new SimulationTime(0))
+                    : new GameCycleState(dto.CycleState.CycleNumber, new SimulationTime(dto.CycleState.StartedAtTick), new SimulationTime(dto.CycleState.NextTransitionAtTick), dto.CycleState.CycleLengthTicks),
+                (dto.EventLog ?? Array.Empty<GameEventRecordDto>()).Select(ev => new GameEventRecord(ev.Id, Enum.Parse<GameEventCategory>(ev.Category, true), new SimulationTime(ev.OccurredAtTick), ev.Description, ev.Severity, ev.Causes.ToList())).ToList());
         }
 
         private static PersonId PersonIdFromString(string s) => new(Guid.Parse(s));

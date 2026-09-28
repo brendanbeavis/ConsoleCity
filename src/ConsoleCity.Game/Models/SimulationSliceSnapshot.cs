@@ -11,6 +11,7 @@ public sealed record SimulationSliceSnapshot(
     WorldModel World,
     AgentPopulationSnapshot Population,
     EconomySnapshot Economy,
+    GameProgressionState Progression,
     IReadOnlyList<CommuteTrip> ActiveTrips,
     int CompletedTrips,
     int HouseholdPurchases);

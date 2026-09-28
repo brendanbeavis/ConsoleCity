@@ -28,7 +28,7 @@ public sealed class MapInspector
         {
             return new MapObject(
                 ObjectType.Building,
-                cell.BuildingId.Value.Value.ToString(),
+                cell.BuildingId.Value.ToString(),
                 cell.BuildingType?.ToString() ?? "Unknown",
                 position);
         }
@@ -38,7 +38,7 @@ public sealed class MapInspector
         {
             return new MapObject(
                 ObjectType.Plot,
-                cell.PlotId.Value.Value.ToString(),
+                cell.PlotId.Value.ToString(),
                 cell.LandUse?.ToString() ?? "Unknown",
                 position);
         }
@@ -84,7 +84,7 @@ public sealed class MapInspector
         {
             objects.Add(new MapObject(
                 ObjectType.Building,
-                id.Value.ToString(),
+                id.ToString(),
                 type.ToString(),
                 pos));
         }
@@ -104,7 +104,7 @@ public sealed class MapInspector
         {
             objects.Add(new MapObject(
                 ObjectType.Plot,
-                id.Value.ToString(),
+                id.ToString(),
                 use.ToString(),
                 pos));
         }
@@ -148,7 +148,7 @@ public sealed class MapInspector
             {
                 objects.Add(new MapObject(
                     ObjectType.Building,
-                    id.Value.ToString(),
+                    id.ToString(),
                     type.ToString(),
                     pos));
             }
@@ -160,7 +160,7 @@ public sealed class MapInspector
             {
                 objects.Add(new MapObject(
                     ObjectType.Plot,
-                    id.Value.ToString(),
+                    id.ToString(),
                     use.ToString(),
                     pos));
             }
@@ -175,14 +175,14 @@ public sealed class MapInspector
     public MapObject? FindObjectById(string objectId)
     {
         var buildings = mapView.GetAllBuildings();
-        var (buildingId, buildingType, buildingPos) = buildings.FirstOrDefault(b => b.Id.Value.ToString() == objectId);
+        var (buildingId, buildingType, buildingPos) = buildings.FirstOrDefault(b => b.Id.ToString() == objectId);
         if (buildingId != null)
         {
             return new MapObject(ObjectType.Building, objectId, buildingType.ToString(), buildingPos);
         }
 
         var plots = mapView.GetAllPlots();
-        var (plotId, plotUse, plotPos) = plots.FirstOrDefault(p => p.Id.Value.ToString() == objectId);
+        var (plotId, plotUse, plotPos) = plots.FirstOrDefault(p => p.Id.ToString() == objectId);
         if (plotId != null)
         {
             return new MapObject(ObjectType.Plot, objectId, plotUse.ToString(), plotPos);

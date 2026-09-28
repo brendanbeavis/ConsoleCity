@@ -7,6 +7,15 @@ allowing mouse-friendly inspection.
 
 Text and structured panels are preferred over high-fidelity graphics.
 
+The graphical client should use a hybrid presentation:
+
+-   terminal-style panels for status, diagnostics and inspection;
+-   low-resolution 2D map rendering for spatial information;
+-   restrained colours, simple geometry and replaceable assets.
+
+The same core actions should remain available in both console and graphical
+modes.
+
 ## Main menu
 
 ``` text
@@ -86,7 +95,9 @@ Suggested layout:
 -   save;
 -   load;
 -   camera/map mode;
--   event log.
+-   event log;
+-   pan and zoom in graphical mode;
+-   mouse selection/inspection in graphical mode.
 
 ## Build menu
 

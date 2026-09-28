@@ -32,5 +32,19 @@ public interface IGameSession
 
     void Load(string name, string? baseDirectory = null);
 
+    IReadOnlyList<TechnologyDefinition> GetAvailableTechnologies();
+
+    bool ResearchTechnology(string technologyId);
+
+    IReadOnlyList<GameModifierDefinition> GetAvailableModifiers();
+
+    bool PurchaseModifier(string modifierId);
+
+    IReadOnlyList<GamePolicyDefinition> GetAvailablePolicies();
+
+    bool SetPolicy(string policyId, decimal intensity);
+
+    IReadOnlyList<GameEventRecord> GetRecentEvents(int maxCount = 20);
+
     IReadOnlyList<string> ListSaves(string? baseDirectory = null);
 }

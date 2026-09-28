@@ -260,6 +260,8 @@ internal static class PlayableWorldFactory
             GovernmentFinance.Zero,
             []);
 
+        var progression = ProgressionEngine.CreateInitialProgression(currentTime);
+
         return new SimulationSliceState(
             seed,
             currentTime,
@@ -267,6 +269,7 @@ internal static class PlayableWorldFactory
             people,
             households,
             economy,
+            progression,
             homeBuildingByPerson,
             homeBuildingByHousehold,
             workplaceBuildingByPerson,

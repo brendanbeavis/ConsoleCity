@@ -70,6 +70,24 @@ public sealed class InfrastructureSimulationSystem : ISimulationSystem
             nodeDemand[conn.NodeId] = nodeDemand.GetValueOrDefault(conn.NodeId) + totalDemand;
         }
 
+        // Apply explicit consumer overrides even when no world building is available.
+        foreach (var overrideEntry in consumerDemand)
+        {
+            var conn = infra.GetConnection(overrideEntry.Key);
+            if (conn is null)
+            {
+                continue;
+            }
+
+            var node = infra.Snapshot.Networks.SelectMany(n => n.Nodes).FirstOrDefault(n => n.Id == conn.NodeId);
+            if (node is null)
+            {
+                continue;
+            }
+
+            nodeDemand[conn.NodeId] = nodeDemand.GetValueOrDefault(conn.NodeId) + overrideEntry.Value;
+        }
+
         // Apply computed demands to nodes
         foreach (var pair in nodeDemand)
         {

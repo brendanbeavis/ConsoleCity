@@ -29,3 +29,4 @@
 - [26 Testing And Automation](26-testing-and-automation.md)
 - [27 Data Driven Content](27-data-driven-content.md)
 - [28 Mvp And Implementation Roadmap](28-mvp-and-implementation-roadmap.md)
+- [29 Graphical Ui](29-graphical-ui.md)

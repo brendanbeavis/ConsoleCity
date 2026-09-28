@@ -21,13 +21,15 @@ Keep dependencies intentionally small.
 
 ### UI
 
-**Terminal.Gui** is a strong candidate for a console-style interactive
-UI.
+Presentation remains split from the simulation core.
 
-Alternative/fallback:
+Current presentation choices:
 
--   plain `System.Console` for the first prototype;
--   a lightweight custom renderer later if necessary.
+-   plain `System.Console` for the console client;
+-   `Raylib-cs` for the graphical 2D client.
+
+`Terminal.Gui` remains a possible future option for richer text-first tools,
+but it is not required for the current graphical vertical slice.
 
 ### Serialization
 
@@ -68,22 +70,26 @@ Potential library:
 
 ## Architecture
 
-Recommended separation:
+Current presentation-oriented separation:
 
 ``` text
-ConsoleCity
-├── ConsoleCity.App
-├── ConsoleCity.Core
-├── ConsoleCity.Simulation
-├── ConsoleCity.Economy
-├── ConsoleCity.Technology
-├── ConsoleCity.Progression
-├── ConsoleCity.WorldGeneration
-├── ConsoleCity.Infrastructure
-├── ConsoleCity.UI
-├── ConsoleCity.Tests
-└── ConsoleCity.Testing
+ConsoleCity.Console
+                 ┐
+ConsoleCity.Graphics
+                 ├──> ConsoleCity.Game
+                 │      ↓
+                 │   ConsoleCity.Simulation
+                 │      ↓
+                 └──> world/domain projects
 ```
+
+The graphical boundary is intentionally thin:
+
+-   `ConsoleCity.Graphics` owns Raylib setup, input polling, view-model
+    building, camera maths and rendering.
+-   `ConsoleCity.Game` remains the presentation-facing source of truth for
+    simulation state, inspection and construction requests.
+-   domain and simulation projects do not reference graphical code.
 
 ## Core principle
 

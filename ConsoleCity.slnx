@@ -37,6 +37,7 @@
     <Project Path="src/ConsoleCity.Core/ConsoleCity.Core.csproj" />
     <Project Path="src/ConsoleCity.Economy/ConsoleCity.Economy.csproj" />
     <Project Path="src/ConsoleCity.Game/ConsoleCity.Game.csproj" />
+    <Project Path="src/ConsoleCity.Graphics/ConsoleCity.Graphics.csproj" />
     <Project Path="src/ConsoleCity.Infrastructure/ConsoleCity.Infrastructure.csproj" />
     <Project Path="src/ConsoleCity.Services/ConsoleCity.Services.csproj" />
     <Project Path="src/ConsoleCity.Simulation/ConsoleCity.Simulation.csproj" />
@@ -48,6 +49,7 @@
     <Project Path="tests/ConsoleCity.Console.Tests/ConsoleCity.Console.Tests.csproj" />
     <Project Path="tests/ConsoleCity.Core.Tests/ConsoleCity.Core.Tests.csproj" />
     <Project Path="tests/ConsoleCity.Economy.Tests/ConsoleCity.Economy.Tests.csproj" />
+    <Project Path="tests/ConsoleCity.Graphics.Tests/ConsoleCity.Graphics.Tests.csproj" />
     <Project Path="tests/ConsoleCity.Infrastructure.Tests/ConsoleCity.Infrastructure.Tests.csproj" />
     <Project Path="tests/ConsoleCity.Services.Tests/ConsoleCity.Services.Tests.csproj" />
     <Project Path="tests/ConsoleCity.Simulation.Tests/ConsoleCity.Simulation.Tests.csproj" />

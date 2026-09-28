@@ -112,6 +112,111 @@ public sealed class GameSession : IGameSession
         }
     }
 
+    public IReadOnlyList<TechnologyDefinition> GetAvailableTechnologies()
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+            return ProgressionEngine.GetAvailableTechnologies(state!.Progression);
+        }
+    }
+
+    public bool ResearchTechnology(string technologyId)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+
+            try
+            {
+                if (!ProgressionEngine.TryResearchTechnology(state!.Progression, new TechnologyId(technologyId), state.CurrentTime, out var updatedProgression))
+                {
+                    return false;
+                }
+
+                state = state with { Progression = updatedProgression };
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+    }
+
+    public IReadOnlyList<GameModifierDefinition> GetAvailableModifiers()
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+            return ModifierCatalog.GetAvailableModifiers(state!.Progression);
+        }
+    }
+
+    public bool PurchaseModifier(string modifierId)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+
+            try
+            {
+                if (!ModifierEngine.TryPurchaseModifier(state!.Progression, new GameModifierId(modifierId), state.CurrentTime, out var updatedProgression))
+                {
+                    return false;
+                }
+
+                state = state with { Progression = updatedProgression };
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+    }
+
+    public IReadOnlyList<GamePolicyDefinition> GetAvailablePolicies()
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+            return PolicyCatalog.GetAvailablePolicies(state!.Progression);
+        }
+    }
+
+    public bool SetPolicy(string policyId, decimal intensity)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+
+            try
+            {
+                if (!PolicyEngine.TrySetPolicy(state!.Progression, new GamePolicyId(policyId), intensity, state.CurrentTime, out var updatedProgression))
+                {
+                    return false;
+                }
+
+                state = state with { Progression = updatedProgression };
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+    }
+
+    public IReadOnlyList<GameEventRecord> GetRecentEvents(int maxCount = 20)
+    {
+        lock (syncRoot)
+        {
+            EnsureWorldCreated();
+            return state!.Progression.EventLog.TakeLast(Math.Max(1, maxCount)).ToList();
+        }
+    }
+
     public IReadOnlyList<string> ListSaves(string? baseDirectory = null)
     {
         lock (syncRoot)
@@ -349,8 +454,9 @@ public sealed class GameSession : IGameSession
 
             // Create construction project
             var cost = ConstructionCosts.GetCost(buildingType);
+            var adjustedCost = new Money(PolicyEngine.ResolveDecimal(currentState.Progression, PolicyTargets.ConstructionCost, cost.Amount));
             var duration = ConstructionCosts.GetDurationTicks(buildingType);
-            var construction = new BuildingConstruction(ConstructionId.New(), buildingType, location, cost, duration, currentState.CurrentTime);
+            var construction = new BuildingConstruction(ConstructionId.New(), buildingType, location, adjustedCost, duration, currentState.CurrentTime);
 
             // Validate and fund
             var validated = construction.Validate();
